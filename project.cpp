@@ -1,199 +1,165 @@
 #include <iostream>
-#include <string>
-#include <queue>
-#include <unordered_map>
 #include <fstream>
+#include <unordered_map>
+#include <queue>
+#include <vector>
+
 using namespace std;
 
-// A Tree node
-struct Node
-{
+// Node structure for Huffman tree
+struct Node {
     char ch;
     int freq;
     Node *left, *right;
-};
 
-// Function to allocate a new tree node
-Node* getNode(char ch, int freq, Node* left, Node* right)
-{
-    Node* node = new Node();
-
-    node->ch = ch;
-    node->freq = freq;
-    node->left = left;
-    node->right = right;
-
-    return node;
-}
-
-// Comparison object to be used to order the heap
-struct comp
-{
-    bool operator()(Node* l, Node* r)
-    {
-        // highest priority item has lowest frequency
-        return l->freq > r->freq;
+    Node(char ch, int freq, Node* left = nullptr, Node* right = nullptr) {
+        this->ch = ch;
+        this->freq = freq;
+        this->left = left;
+        this->right = right;
     }
 };
 
-// traverse the Huffman Tree and store Huffman Codes
-// in a map.
-void encode(Node* root, string str,
-            unordered_map<char, string> &huffmanCode)
-{
-    if (root == nullptr)
-        return;
+// Comparison function for priority queue
+struct Compare {
+    bool operator()(Node* a, Node* b) {
+        return a->freq > b->freq;
+    }
+};
 
-    // found a leaf node
+// Generate Huffman codes recursively
+void generateCodes(Node* root, string code, unordered_map<char, string>& huffmanCode) {
+    if (!root)
+        return;
+    
     if (!root->left && !root->right) {
-        huffmanCode[root->ch] = str;
+        huffmanCode[root->ch] = code;
     }
-
-    encode(root->left, str + "0", huffmanCode);
-    encode(root->right, str + "1", huffmanCode);
+    
+    generateCodes(root->left, code + "0", huffmanCode);
+    generateCodes(root->right, code + "1", huffmanCode);
 }
 
-// traverse the Huffman Tree and decode the encoded string
-void decode(Node* root, int &index, string str)
-{
-    if (root == nullptr) {
-        return;
-    }
-
-    // found a leaf node
-    if (!root->left && !root->right)
-    {
-        cout << root->ch;
-        return;
-    }
-
-    index++;
-
-    if (str[index] =='0')
-        decode(root->left, index, str);
-    else
-        decode(root->right, index, str);
-}
-
-// Builds Huffman Tree and decode given input text
-void buildHuffmanTree(string text, const string& compressedFile, const string& decompressedFile)
-{
-    // count frequency of appearance of each character
-    // and store it in a map
+// Build Huffman Tree and return root
+Node* buildHuffmanTree(const string& text, unordered_map<char, string>& huffmanCode) {
     unordered_map<char, int> freq;
-    for (char ch: text) {
+    for (char ch : text) {
         freq[ch]++;
     }
-
-    // Create a priority queue to store live nodes of
-    // Huffman tree;
-    priority_queue<Node*, vector<Node*>, comp> pq;
-
-    // Create a leaf node for each character and add it
-    // to the priority queue.
-    for (auto pair: freq) {
-        pq.push(getNode(pair.first, pair.second, nullptr, nullptr));
+    
+    priority_queue<Node*, vector<Node*>, Compare> pq;
+    for (auto& pair : freq) {
+        pq.push(new Node(pair.first, pair.second));
     }
-
-    // do till there is more than one node in the queue
-    while (pq.size() != 1)
-    {
-        // Remove the two nodes of highest priority
-        // (lowest frequency) from the queue
-        Node *left = pq.top(); pq.pop();
-        Node *right = pq.top();    pq.pop();
-
-        // Create a new internal node with these two nodes
-        // as children and with frequency equal to the sum
-        // of the two nodes' frequencies. Add the new node
-        // to the priority queue.
-        int sum = left->freq + right->freq;
-        pq.push(getNode('\0', sum, left, right));
+    
+    while (pq.size() > 1) {
+        Node* left = pq.top(); pq.pop();
+        Node* right = pq.top(); pq.pop();
+        pq.push(new Node('\0', left->freq + right->freq, left, right));
     }
-
-    // root stores pointer to root of Huffman Tree
+    
     Node* root = pq.top();
-
-    // traverse the Huffman Tree and store Huffman Codes
-    // in a map. Also prints them
-    unordered_map<char, string> huffmanCode;
-    encode(root, "", huffmanCode);
-
-    cout << "Huffman Codes are :\n" << '\n';
-    for (auto pair: huffmanCode) {
-        cout << pair.first << " " << pair.second << '\n';
-    }
-
-    cout << "\nOriginal string was :\n" << text << '\n';
-
-    // print encoded string
-    string str = "";
-    for (char ch: text) {
-        str += huffmanCode[ch];
-    }
-
-    cout << "\nEncoded string is :\n" << str << '\n';
-
-    // Write the compressed data to a file
-    ofstream outFile(compressedFile);
-    if (outFile.is_open()) {
-        outFile << str;
-        outFile.close();
-    } else {
-        cerr << "Unable to open file for writing compressed data.\n";
-        return;
-    }
-
-    // Read the compressed data from the file
-    ifstream inFile(compressedFile);
-    string compressedStr;
-    if (inFile.is_open()) {
-        getline(inFile, compressedStr);
-        inFile.close();
-    } else {
-        cerr << "Unable to open file for reading compressed data.\n";
-        return;
-    }
-
-    // traverse the Huffman Tree again and this time
-    // decode the encoded string
-    int index = -1;
-    string decodedStr;
-    cout << "\nDecoded string is: \n";
-    while (index < (int)compressedStr.size() - 2) {
-        decode(root, index, compressedStr);
-    }
-
-    // Write the decoded data to a file
-    ofstream decFile(decompressedFile);
-    if (decFile.is_open()) {
-        decFile << decodedStr;
-        decFile.close();
-    } else {
-        cerr << "Unable to open file for writing decompressed data.\n";
-        return;
-    }
+    generateCodes(root, "", huffmanCode);
+    return root;
 }
 
-// Huffman coding algorithm
-int main()
-{
-    string inputFile = "input.txt";
-    string compressedFile = "compressed.txt";
-    string decompressedFile = "decompressed.txt";
+// Compress text using Huffman coding
+string compressText(const string& text, unordered_map<char, string>& huffmanCode) {
+    string compressed = "";
+    for (char ch : text) {
+        compressed += huffmanCode[ch];
+    }
+    return compressed;
+}
 
-    // Read the input text from a file
-    ifstream inFile(inputFile);
-    string text;
-    if (inFile.is_open()) {
-        getline(inFile, text);
-        inFile.close();
-    } else {
-        cerr << "Unable to open file for reading input text.\n";
+// Save compressed data to file
+void saveCompressedFile(const string& filename, const string& compressedData, unordered_map<char, string>& huffmanCode) {
+    ofstream file(filename, ios::binary);
+    file << huffmanCode.size() << "\n";
+    for (auto& pair : huffmanCode) {
+        file << pair.first << " " << pair.second << "\n";
+    }
+    file << compressedData;
+    file.close();
+}
+
+// Load Huffman codes from file
+unordered_map<string, char> loadHuffmanCodes(ifstream& file) {
+    unordered_map<string, char> reverseHuffmanCode;
+    int size;
+    file >> size;
+    file.ignore();
+    while (size--) {
+        char ch;
+        string code;
+        file.get(ch);
+        file.ignore();
+        getline(file, code);
+        reverseHuffmanCode[code] = ch;
+    }
+    return reverseHuffmanCode;
+}
+
+// Decompress Huffman encoded string
+string decompressText(const string& compressedData, unordered_map<string, char>& reverseHuffmanCode) {
+    string decoded = "", temp = "";
+    for (char bit : compressedData) {
+        temp += bit;
+        if (reverseHuffmanCode.find(temp) != reverseHuffmanCode.end()) {
+            decoded += reverseHuffmanCode[temp];
+            temp = "";
+        }
+    }
+    return decoded;
+}
+
+// Load compressed file and decompress it
+void decompressFile(const string& compressedFilename, const string& outputFilename) {
+    ifstream file(compressedFilename, ios::binary);
+    auto reverseHuffmanCode = loadHuffmanCodes(file);
+    string compressedData((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+    file.close();
+    
+    string decompressedText = decompressText(compressedData, reverseHuffmanCode);
+    ofstream outFile(outputFilename);
+    outFile << decompressedText;
+    outFile.close();
+}
+
+int main() {
+    string inputFilename = "C:\\Users\\Lenovo\\OneDrive\\Desktop\\c^M^Mproject.docx";
+    string compressedFilename = "C:\\Users\\Lenovo\\OneDrive\\Desktop\\compressed.huff";
+    string decompressedFilename = "C:\\Users\\Lenovo\\OneDrive\\Desktop\\decompressed.docx";
+
+    // Read input file in binary mode
+    ifstream inputFile(inputFilename, ios::binary);
+    if (!inputFile) {
+        cout << "Error: Unable to open input file!" << endl;
         return 1;
     }
 
-    buildHuffmanTree(text, compressedFile, decompressedFile);
+    string text((istreambuf_iterator<char>(inputFile)), istreambuf_iterator<char>());
+    inputFile.close();
+
+    if (text.empty()) {
+        cout << "Error: Input file is empty!" << endl;
+        return 1;
+    }
+
+    unordered_map<char, string> huffmanCode;
+    buildHuffmanTree(text, huffmanCode);
+
+    string compressedData = compressText(text, huffmanCode);
+    saveCompressedFile(compressedFilename, compressedData, huffmanCode);
+
+    // Decompress the file
+    decompressFile(compressedFilename, decompressedFilename);
+
+    cout << "Compression and Decompression completed!" << endl;
+    ifstream file("C:\\Users\\Lenovo\\OneDrive\\Desktop\\compressed.huff", ios::binary);
+string data((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
+cout << "Compressed file content: " << data << endl;
+file.close();
 
     return 0;
 }
